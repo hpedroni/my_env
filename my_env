@@ -1,1 +1,172 @@
-test
+#!/usr/bin/env bash
+# try to use vt100 as default
+export TERM=xterm
+
+# set the erase key to backspace
+#stty erase ^?
+
+# Disable -u setting if setted (it causes our workaround for time prompt to not work)
+# -u
+# Treat unset parameters as an error when substituting.
+set +u
+
+# # The terminal mode, I don't like vi commands in the terminal so I set it up to emacs
+set -o emacs
+
+# global variables
+ENV_DIR="$(dirname "${BASH_SOURCE[0]}")"
+CUSTOM_ENV_DIR="$ENV_DIR/env.d"
+HOSTNAME="$(hostname -s)"
+LOGIN_NAME="${LOGIN_NAME:-$(whoami)}"
+SYSTEMID=${SYSTEMID:-$HOSTNAME}
+#OSNAME="$(uname -s)"
+BOLD="$(tput bold)"
+NORM="$(tput sgr0)"
+
+export BOLD
+export NORM
+
+# Set the prompt
+setPrompt () {
+  # check if we have color support
+  if [ -x /usr/bin/tput ] && tput setaf 1 >&/dev/null; then
+    GREEN="$(tput setaf 2)"
+    WHITE="$(tput setaf 7)"
+    BLUE="$(tput setaf 4)"
+    YELLOW="$(tput setaf 3)"
+
+    # We have color support
+    # do not remove the [ ] otherwise you are going to see gargage when you navitage thruogh history
+    export PS1="\[${BOLD}\]\[${GREEN}\]\h:\[${WHITE}\]\w - \[${BLUE}\]\t\n\[${YELLOW}\]\u>\[${NORM}\] "
+  else
+    export PS1="${BOLD}\h:\w - \t${NORM}\n${LOGIN_NAME}> "
+  fi
+}
+setPrompt
+
+# Common Aliases
+alias ll="ls -la"
+alias lt="ls -lart"
+alias ltt="lt | tail -20"
+alias lg="ls -la | grep -i"
+alias hdu="\du -k . | sort  -rn | head -20 | awk '{print \$NF}' | xargs -I {} du -sh {}"
+alias fhdu="find . -type d | xargs -I{} du -sk {} | sort -rn | head -20"
+alias pg="ps -ef | grep -i"
+alias pgt="pstree -aplh | grep -A10 -B10 -i"
+alias srt="sort | uniq -c | sort -n"
+alias ns="/usr/*bin/nslookup"
+alias zcat="zcat -f"
+alias clean="egrep -v '(^ *#|^ *$)'" # Remove any empty lines and comment lines
+ls --color > /dev/null 2>&1 && alias ls="ls --color"
+
+# uper/lower case strings
+alias sup="tr '[a-z]' '[A-Z]'"
+alias slow="tr '[A-Z]' '[a-z]'"
+
+# Working with pids
+pids () { awk '{ print $2 }'; }
+alias killpids="pids | xargs kill -9"
+
+# Prevent typo grep errors
+alias grpe="grep"
+alias gpre="grep"
+alias grepe="grep"
+alias greo="grep"
+alias gerp="grep"
+alias sork="sort"
+
+# convert spaces to pipes
+alias reg="xargs | sed -e 's/ /\|/g'"
+
+# To reset the terminal when the reset command does not work
+alias rst='echo "X[mX(BX)0OX[?5lX7X[rX8" | tr "XO" "\033\017"'
+
+# create a temporary web server to share files under current folder
+python_web_server_module () {
+  module="SimpleHTTPServer"
+  if python -V | grep -q "Python 3"
+  then
+    module="http.server"
+  fi
+  echo "$module"
+}
+# shellcheck disable=SC2139
+alias tt="python -m $(python_web_server_module)"
+
+# screen aliases
+alias sl="screen -list "
+alias sn="screen -S "
+alias sr="screen -d -r "
+
+#
+# For small typos
+#
+# cdspell
+#   If set, minor errors in the spelling of a directory component in a cd command will be corrected.
+#   The errors checked for are transposed characters, a missing character, and a character too many.
+#   If a correction is found, the corrected path is printed, and the command proceeds. This option
+#   is only used by interactive shells.
+#
+if [ -f /bin/bash ]; then
+    if ps -p $$ | tail -1 | awk '{print $NF}' | grep bash > /dev/null 2>&1
+    then
+        shopt -s cdspell
+        shopt -s expand_aliases # to make aliases work in sub shells
+    fi
+fi
+
+# Always edit crontab using vi
+export EDITOR=vi
+export VISUAL=vi
+
+# show last field
+nf () {
+  awk -F "${1:- }" '{print $NF}' # default field separator to space
+}
+
+# break lines based on char
+trn () {
+  _div="$1"
+  [ -z "$_div" ] && echo "usage trn <field separator>" && return 1
+  tr "$_div" "\n"
+}
+
+# display columns based on split char (default is space)
+c () {
+  split_field="$1"; shift  # field separator
+  cols="$*" # columns to display
+
+  # if split_field is mumeric a column value was given and we should use default split field value
+  [[ "$split_field" =~ ^[0-9]+$ ]] && cols="$split_field $cols" && split_field=" "
+
+  # to pass in custom colums to awk we need to create variables with -v flag for each column
+  # and then use these variables inside awk script secion
+  awk_vars=""
+  awk_var_idx=1
+  for val in $cols; do
+    awk_vars="$awk_vars -v var${awk_var_idx}=$val"
+    awk_values="$awk_values\$var${awk_var_idx},"
+    ((awk_var_idx=awk_var_idx+1))
+  done
+  # ${var%?} -> remove last char from string
+  cmd="awk $awk_vars -F '$split_field' '{ print ${awk_values%?} }'"
+  eval "$cmd"
+}
+
+de () {
+  id="$1"
+  shell="${2:-bash}"
+  cmd="$(which docker)"
+  [ -z "$cmd" ] && cmd="$(which podman)"
+  [ -z "$cmd" ] && echo no docker or podman found, exiting.... && return 1
+  $cmd exec -it "$id" "$shell"
+}
+
+
+if test -d "$CUSTOM_ENV_DIR"
+then
+  # if any .env files load them
+  for env_file in "$CUSTOM_ENV_DIR"/*.env; do
+    [[ -r "$env_file" && -f "$env_file" ]] && . "$env_file"
+  done
+fi
