@@ -141,8 +141,7 @@ c () {
 
   # to pass in custom colums to awk we need to create variables with -v flag for each column
   # and then use these variables inside awk script secion
-  awk_vars=""
-  awk_var_idx=1
+  awk_vars=""; awk_values=""; awk_var_idx=1
   for val in $cols; do
     awk_vars="$awk_vars -v var${awk_var_idx}=$val"
     awk_values="$awk_values\$var${awk_var_idx},"
@@ -150,6 +149,14 @@ c () {
   done
   # ${var%?} -> remove last char from string
   cmd="awk $awk_vars -F '$split_field' '{ print ${awk_values%?} }'"
+
+  # debug
+  # echo "[$cols]"
+  # echo "[$split_field]"
+  # echo "[$awk_vars]"
+  # echo "[$awk_values]"
+  # echo "[$cmd]"
+
   eval "$cmd"
 }
 
